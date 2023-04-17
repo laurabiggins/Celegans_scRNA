@@ -1,0 +1,187 @@
+---
+title: "C elegans scRNA"
+author: "Laura Biggins"
+date: "2023-04-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(limma)
+library(tidyverse)
+library(DT)
+```
+
+## Finding genes that are upregulated in certain clusters
+
+
+```{r, eval = FALSE}
+load("data/clr_norm_scaled_worms.rds")
+
+meta <- worms@meta.data
+cluster_names <- as.character(meta$annotate_name)
+```
+
+
+Using the FindMarkers Seurat function
+
+### intestine
+
+```{r, eval = FALSE}
+of_interest <- grepl("^3_[1245]", cluster_names) # intestine
+
+x <- meta[of_interest , ]
+y <- meta[!of_interest , ]
+
+intestine_markers <- FindMarkers(worms@assays$RNA, cells.1 = rownames(x), cells.2 = rownames(y))
+
+save(intestine_markers, file = "data/intestine_markers.rds")
+```
+
+### body wall muscle
+
+```{r, eval=FALSE}
+name_pattern <- "^4_[012]|^1_1"
+
+of_interest <- grepl(name_pattern, cluster_names)
+# check
+unique(cluster_names[of_interest])
+
+body_wall_muscle_markers <- FindMarkers(
+  worms@assays$RNA, 
+  cells.1 = rownames(meta)[of_interest], 
+  cells.2 = rownames(meta)[!of_interest]
+)
+
+save(body_wall_muscle_markers, file = "data/body_wall_muscle_markers.rds")
+```
+
+### pharynx
+
+```{r, eval=FALSE}
+name_pattern <- "^26_[012]|^24_1|^41_0|^78_0"
+
+of_interest <- grepl(name_pattern, cluster_names)
+
+unique(cluster_names[of_interest]) # check
+
+pharynx_markers <- FindMarkers(
+  worms@assays$RNA, 
+  cells.1 = rownames(meta)[of_interest], 
+  cells.2 = rownames(meta)[!of_interest]
+)
+
+save(pharynx_markers, file = "data/pharynx_markers.rds")
+```
+
+### neurons
+
+```{r, eval = FALSE}
+name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
+
+of_interest <- grepl(name_pattern, cluster_names)
+
+unique(cluster_names[of_interest]) # check
+
+neuron_markers <- FindMarkers(
+  worms@assays$RNA, 
+  cells.1 = rownames(meta)[of_interest], 
+  cells.2 = rownames(meta)[!of_interest]
+)
+
+save(neuron_markers, file = "data/neuron_markers.rds")
+```
+
+
+## Identified genes
+
+```{r}
+show_up_genes <- function(markers){
+	up_genes <- markers %>%
+  	filter(avg_log2FC > 0) %>%
+  	arrange(desc(avg_log2FC)) 
+
+	DT::datatable(up_genes)
+}
+```
+
+
+### intestine
+
+```{r}
+load("data/intestine_markers.rds")
+show_up_genes(intestine_markers)
+```
+
+### body wall muscle
+
+```{r}
+load("data/body_wall_muscle_markers.rds")
+show_up_genes(body_wall_muscle_markers)
+```
+
+
+### pharynx
+
+```{r}
+load("data/pharynx_markers.rds")
+show_up_genes(pharynx_markers)
+```
+
+
+### neurons
+
+```{r}
+load("data/neuron_markers.rds")
+show_up_genes(neuron_markers)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, echo = FALSE, eval=FALSE}
+rownames(up_genes)
+
+all_cells <- as.matrix(worms@assays$RNA@counts[rownames(up_genes), ])
+
+#one_gene  <- all_cells[1,]
+
+tbl_selected <- as_tibble(all_cells, rownames = "gene") %>%
+	pivot_longer(cols = -gene, values_to = "count", names_to = "cell") %>%
+  mutate(type = ifelse(cell %in% rownames(x), "marker", "other"))
+
+tbl_intestine <- tbl_selected %>%
+  filter(type == "marker")
+
+
+tbl_selected %>%
+	ggplot(aes(x = gene, y = log2(count))) +
+	geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+	geom_jitter(data = tbl_intestine, size = 1, colour = "blue", alpha = 0.5, width = 0.2, height = 0) +
+	coord_flip()
+
+tbl_selected %>%
+	ggplot(aes(x = gene, y = log2(count), colour = type)) +
+	geom_boxplot(outlier.shape = NA, alpha = 0.5)
+
+VlnPlot(worms,features="dct-16")
+
+```
+
+
+
+
+
+
+
