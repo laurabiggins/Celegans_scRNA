@@ -9,14 +9,14 @@ library(SeuratDisk)
 # to have a quick look without actually loading the dataset
 #hfile <- Connect("D:/Harry_Jones/worms.h5Seurat")
 # to actually load the Seurat object
-worms <- LoadH5Seurat("D:/Harry_Jones/worms.h5Seurat")
+worms <- LoadH5Seurat("D:/Harry_Jones/scRNA_Celegans/data/worms.h5Seurat")
 
 # Using the convert function from SeuratDisk. This worked fine on the cluster
 # Convert("ad_worm_aging.h5ad", dest = "h5seurat")
 #worms <- LoadH5Seurat("D:/Harry_Jones/ad_worm_aging.h5seurat") # this does not seem to work
 #worms_filt <- subset(worms, nFeature_RNA > 100)
 
-
+# Only running this once as it takes a while
 #==========
 # Some QC
 #==========
@@ -53,7 +53,7 @@ worms$largest_index <- apply(
 worms$largest_gene <- rownames(worms)[worms$largest_index] 
 worms$percent.Largest.Gene <- 100 * worms$largest_count/worms$nCount_RNA
 
-
+save(worms, file="data/worms1.rds")
 
 
 VlnPlot(
@@ -80,7 +80,7 @@ qc.metrics %>%
 	ggplot(aes(nCount_RNA,nFeature_RNA,colour=percent.MT)) + 
 	geom_point() + 
 	scale_color_gradientn(colors=c("black","blue","green2","red","yellow")) +
-	ggtitle("Example of plotting QC metrics") +
+	ggtitle("QC metrics") +
 	geom_hline(yintercept = 750) +
 	geom_hline(yintercept = 2000) +
 	scale_x_log10() + scale_y_log10()
@@ -218,24 +218,24 @@ ggplot(mapping = aes(worms@assays$RNA@data["pmp-3",])) +
 	ggtitle("")
 
 
-as_tibble(
-	worms@assays$RNA@data[,1:100]
-) %>%
-	pivot_longer(
-		cols=everything(),
-		names_to="cell",
-		values_to="expression"
-	) %>%
-	ggplot(aes(x=expression, group=cell)) +
-	geom_density() +
-	coord_cartesian(ylim=c(0,0.6), xlim=c(0,3))
+# as_tibble(
+# 	worms@assays$RNA@data[,1:100]
+# ) %>%
+# 	pivot_longer(
+# 		cols=everything(),
+# 		names_to="cell",
+# 		values_to="expression"
+# 	) %>%
+# 	ggplot(aes(x=expression, group=cell)) +
+# 	geom_density() #+
+# 	#coord_cartesian(ylim=c(0,0.6), xlim=c(0,3))
 
 # way too many 0 values to use the simple normalisation
 # Normalise again, this time using a centered log ratio transformation - 
 # more similar to the sort of size factor based normalisation which is used for many RNA-Seq experiments. The margin=2 option means that it normalises per cell instead of per gene
 worms <- NormalizeData(worms, normalization.method = "CLR", margin = 2)
 
-save(worms, file = "D:/Harry_Jones/clr_norm_worms.rds")
+save(worms, file = "data/clr_norm_worms.rds")
 
 
 as_tibble(
@@ -286,7 +286,7 @@ variance.data %>%
 
 
 worms <- ScaleData(worms,features=rownames(data))
-save(worms, file = "D:/Harry_Jones/clr_norm_scaled_worms.rds")
+save(worms, file = "data/clr_norm_scaled_worms.rds")
 
 
 RunPCA(worms,features=VariableFeatures(worms)) -> worms
