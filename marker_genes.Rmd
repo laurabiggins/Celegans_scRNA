@@ -17,7 +17,8 @@ library(DT)
 
 
 ```{r, eval = FALSE}
-load("data/clr_norm_scaled_worms.rds")
+#load("data/clr_norm_scaled_worms.rds")
+load("data/clr_norm_scaled_worms_lax.rds")
 
 meta <- worms@meta.data
 cluster_names <- as.character(meta$annotate_name)
@@ -34,9 +35,16 @@ of_interest <- grepl("^3_[1245]", cluster_names) # intestine
 x <- meta[of_interest , ]
 y <- meta[!of_interest , ]
 
-intestine_markers <- FindMarkers(worms@assays$RNA, cells.1 = rownames(x), cells.2 = rownames(y))
+#intestine_markers0 <- FindMarkers(worms@assays$RNA, cells.1 = rownames(x), cells.2 = rownames(y))
+intestine_markers <- FindMarkers(
+	worms@assays$RNA, 
+	cells.1 = rownames(x), 
+	cells.2 = rownames(y),
+	test.use = "roc", 
+	only.pos = TRUE
+)
 
-save(intestine_markers, file = "data/intestine_markers.rds")
+save(intestine_markers, file = "data/intestine_markers_roc.rds")
 ```
 
 ### body wall muscle
@@ -51,10 +59,12 @@ unique(cluster_names[of_interest])
 body_wall_muscle_markers <- FindMarkers(
   worms@assays$RNA, 
   cells.1 = rownames(meta)[of_interest], 
-  cells.2 = rownames(meta)[!of_interest]
+  cells.2 = rownames(meta)[!of_interest],
+  test.use = "roc", 
+	only.pos = TRUE
 )
 
-save(body_wall_muscle_markers, file = "data/body_wall_muscle_markers.rds")
+save(body_wall_muscle_markers, file = "data/body_wall_muscle_markers_roc.rds")
 ```
 
 ### pharynx
@@ -69,10 +79,12 @@ unique(cluster_names[of_interest]) # check
 pharynx_markers <- FindMarkers(
   worms@assays$RNA, 
   cells.1 = rownames(meta)[of_interest], 
-  cells.2 = rownames(meta)[!of_interest]
+  cells.2 = rownames(meta)[!of_interest],
+  test.use = "roc", 
+	only.pos = TRUE
 )
 
-save(pharynx_markers, file = "data/pharynx_markers.rds")
+save(pharynx_markers, file = "data/pharynx_markers_roc.rds")
 ```
 
 ### neurons
@@ -87,10 +99,12 @@ unique(cluster_names[of_interest]) # check
 neuron_markers <- FindMarkers(
   worms@assays$RNA, 
   cells.1 = rownames(meta)[of_interest], 
-  cells.2 = rownames(meta)[!of_interest]
+  cells.2 = rownames(meta)[!of_interest],
+  test.use = "roc", 
+	only.pos = TRUE
 )
 
-save(neuron_markers, file = "data/neuron_markers.rds")
+save(neuron_markers, file = "data/neuron_markers_roc.rds")
 ```
 
 
@@ -110,31 +124,37 @@ show_up_genes <- function(markers){
 ### intestine
 
 ```{r}
-load("data/intestine_markers.rds")
-show_up_genes(intestine_markers)
+load("data/intestine_markers_roc.rds")
+DT::datatable(intestine_markers)
+#show_up_genes(intestine_markers)
 ```
+
+Looking at vit-6 on the calcicolabs interface, it does seem to be a good marker, but cluster 3_5 has very little data and so does not show as being expressed at the later time points.
 
 ### body wall muscle
 
 ```{r}
-load("data/body_wall_muscle_markers.rds")
-show_up_genes(body_wall_muscle_markers)
+load("data/body_wall_muscle_markers_roc.rds")
+DT::datatable(body_wall_muscle_markers)
+#show_up_genes(body_wall_muscle_markers)
 ```
 
 
 ### pharynx
 
 ```{r}
-load("data/pharynx_markers.rds")
-show_up_genes(pharynx_markers)
+load("data/pharynx_markers_roc.rds")
+DT::datatable(pharynx_markers)
+#show_up_genes(pharynx_markers)
 ```
 
 
 ### neurons
 
 ```{r}
-load("data/neuron_markers.rds")
-show_up_genes(neuron_markers)
+load("data/neuron_markers_roc.rds")
+DT::datatable(neuron_markers)
+#show_up_genes(neuron_markers)
 ```
 
 
