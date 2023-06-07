@@ -1,0 +1,317 @@
+---
+title: "Celegans_filtering"
+author: "Laura Biggins"
+date: "2023-05-16"
+output: html_document
+---
+
+---
+title: "C elegans scRNA"
+author: "Laura Biggins"
+date: "2023-04-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Seurat)
+library(limma)
+library(tidyverse)
+library(DT)
+```
+
+## Finding genes that are upregulated in certain clusters
+
+## Identified genes
+
+We've got sets of marker genes that were identified using the Seurat function `FindMarkers()`.
+From these, we want to do some more filtering to find genes that are consistently 
+highly expressed across each of the time points.
+
+```{r}
+# for displaying tables (in markdown doc)
+show_up_genes <- function(markers){
+	up_genes <- markers %>%
+  	filter(avg_log2FC > 0) %>%
+  	arrange(desc(avg_log2FC)) 
+
+	DT::datatable(up_genes)
+}
+
+# for actually returning the tbl
+get_up_genes <- function(markers){
+	up_genes <- markers %>%
+  	filter(avg_log2FC > 0) %>%
+  	arrange(desc(avg_log2FC)) 
+}
+
+```
+
+
+### intestine
+
+```{r}
+load("data/intestine_markers.rds")
+int <- get_up_genes(intestine_markers)
+```
+
+
+```{r, eval=FALSE}
+# Extracting the counts from the matrix
+# only running this once as it uses a lot of memory
+load("data/clr_norm_scaled_worms.rds")
+worm_counts <- worms@assays$RNA@counts
+save(worm_counts, file = "data/worm_counts.rds")
+rm(worms) # it's big so we don't want to keep it in memory if we don't need it
+```
+
+```{r}
+load("data/worm_counts.rds")
+```
+
+Extract the counts for the genes that were up in the intestine clusters
+
+```{r}
+int_mat <- worm_counts[rownames(int),]
+
+# I'm assuming d5_1 and d5_2 are reps 1 and 2.
+intestine_tbl <- as_tibble(int_mat[,], rownames="gene") %>%
+	pivot_longer(cols=-gene) %>%
+	separate_wider_delim(cols=name, delim="_", names = c(NA, "day", "rep")) %>%
+  mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) 
+
+							
+intestine_tbl %>%
+  count(day, rep) %>%
+	ggplot(aes(x=day, y=n, fill=rep)) +
+	geom_col() +
+	scale_fill_brewer(palette="Set1") +
+	ylab("Read count")
+```
+
+There isn't really any data for d15 so we need to bear this in mind.
+
+```{r}
+summarised_inc0 <- intestine_tbl %>%
+	mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) %>%
+	#group_by(gene, day, rep) %>%
+	group_by(gene, day) %>%
+	summarise(
+	  mean = mean(value),
+	  median = median(value),
+	  sd = sd(value)
+	) %>%
+	ungroup()
+
+knitr::kable(head(summarised_inc0))
+```
+
+All the medians are 0 as there are so many with 0 counts, which isn't surprising for single cell data.
+
+We'll do another summary but removing all the 0 counts.
+We can filter on a minimum count value later.
+
+```{r}
+summarised_no0 <- intestine_tbl %>%
+	filter(value > 0) %>%
+	mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) %>%
+	#group_by(gene, day, rep) %>%
+	group_by(gene, day) %>%
+	summarise(
+	  mean = mean(value),
+	  median = median(value),
+	  sd = sd(value),
+	  count = n()
+	) %>%
+	ungroup()
+
+
+summarised_no0 %>%
+	ggplot(aes(x=day, y=mean, group=gene)) +
+  geom_line()
+
+
+```
+
+This looks a bit odd - there's something with a very high count for d15 - we probably want to get rid of that.
+
+```{r}
+summarised_no0 %>%
+	arrange(desc(mean)) %>%
+	head() %>%
+	knitr::kable()
+#intestine_tbl
+```
+    
+It's dod-6 that has the really high mean values, that's going to account for most of the counts in d15.
+I'll remove it so that we can see the other genes more clearly.
+
+```{r}
+summarised_no0 <- summarised_no0 %>%
+	filter(gene != "dod-6")
+
+summarised_no0 %>%
+	ggplot(aes(x=day, y=mean, group=gene)) +
+  geom_line()
+```
+
+
+## Counts
+
+```{r}
+summarised_no0 %>%
+	ggplot(aes(x=day, y = log2(count))) +
+	geom_violin() +
+	geom_hline(yintercept = 6, colour = "red2", lty="dashed")
+```
+
+We'll filter where count > 64. 
+
+
+## Mean values
+
+```{r}
+summarised_no0 %>%
+	ggplot(aes(x=day, y = log2(mean))) +
+	geom_violin()
+```
+
+## Median values
+
+```{r}
+summarised_no0 %>%
+	ggplot(aes(x=day, y = log2(median))) +
+	geom_violin() +
+	geom_jitter(height=0, alpha=0.5)
+```
+
+There are a lot of median values of 1 (showing as 0 on the plot as log transformed), let's try filtering where median > 1.
+
+We'll remove d15 from the filtering, then select where all counts are > 64
+
+```{r}
+high_counts_all_days <- summarised_no0 %>%
+	filter(day != "d15") %>%
+	filter(count > 64) %>%
+	filter(median > 1) %>%
+	group_by(gene) %>%
+	summarise(count_days = n()) %>%
+	filter(count_days == 5) %>%
+	pull(gene)
+```
+
+We've got `r nrow(high_counts_all_days)` genes with high overall counts and medians of > 1 in d1-d11. 
+
+We don't need to redo the summarisation, we'll just filter it for the genes we've selected.
+
+```{r}
+summarised_no0 %>%
+	filter(gene %in% high_counts_all_days) %>%
+	DT::datatable() %>%
+	DT::formatRound(columns=c('mean', 'sd'), digits=3)
+```
+
+
+```{r}
+summarised_no0 %>%
+	filter(gene %in% high_counts_all_days) %>%
+	select(-median, -count) %>%
+	pivot_wider(
+		names_from = day, 
+		values_from = c(mean, sd)
+	) %>%
+	DT::datatable() %>%
+	DT::formatRound(columns=2:13, digits=2)
+```
+
+
+```{r}
+summarised_no0 %>%
+	filter(gene %in% high_counts_all_days) %>%
+	ggplot(aes(x=day, y=mean, group=gene, col=gene)) +
+  geom_line()
+
+summarised_no0 %>%
+	filter(gene %in% high_counts_all_days) %>%
+	ggplot(aes(x=day, y=median, group=gene, col=gene)) +
+  geom_line()
+```
+
+
+The same plots but including all the other data
+```{r}
+subset <- summarised_no0 %>%
+	filter(gene %in% high_counts_all_days)
+
+summarised_no0 %>%
+	ggplot(aes(x=day, y=mean, group=gene)) +
+	geom_line(alpha = 0.5) +
+  geom_line(data=subset, aes(col=gene))
+```
+
+```{r}
+summarised_no0 %>%
+	ggplot(aes(x=day, y=median, group=gene)) +
+	geom_line(alpha = 0.5) +
+  geom_line(data=subset, aes(col=gene))
+```
+
+There are a lot of lines on top of each other as most of the median values are 1 or 2. 
+
+
+
+```{r, eval = FALSE, echo=FALSE}	
+# check whether the values are different in this normalised data vs the original data
+
+# go to line 220	
+
+
+summarised_gene <- summarised_no0 %>%
+	filter(count > 16) %>%
+	group_by(gene) %>%
+	summarise(
+		mean_of_mean = mean(mean),
+		mean_of_median = mean(median),
+		mean_of_sd = mean(sd)
+	) 
+
+#plot the mean vs sd for these genes
+summarised_gene %>%
+	ggplot(aes(x=mean, y=mean_of_sd)) +
+	geom_point()
+
+summarised_gene %>%
+	ggplot(aes(x=mean_of_median, y=mean_of_sd)) +
+	geom_point()
+
+
+top_genes <- summarised_gene %>%
+	arrange(desc(mean_of_median)) %>%
+	slice(1:10) %>%
+	pull(gene)
+```
+
+
+
+### body wall muscle
+
+```{r}
+load("data/body_wall_muscle_markers.rds")
+show_up_genes(body_wall_muscle_markers)
+```
+
+
+### pharynx
+
+```{r}
+load("data/pharynx_markers.rds")
+show_up_genes(pharynx_markers)
+```
+
+
+### neurons
+
+```{r}
+load("data/neuron_markers.rds")
+show_up_genes(neuron_markers)
+```
