@@ -1,21 +1,27 @@
-# I read it in on the cluster using the anndata package
-#w <- anndata::read_h5ad("ad_worm_aging.h5ad")
+---
+title: "C elegans scRNA-seq"
+output: html_document
+date: "2023-06-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(Seurat)
 library(SeuratDisk)
-#library(SeuratData)
+```
+
+## R Markdown
+
+I read it in on the cluster using the anndata package
+w <- anndata::read_h5ad("ad_worm_aging.h5ad")
 
 
-# to have a quick look without actually loading the dataset
-#hfile <- Connect("D:/Harry_Jones/worms.h5Seurat")
-# to actually load the Seurat object
+
+
+```{r QC}
+#To load the Seurat object:
 worms <- LoadH5Seurat("D:/Harry_Jones/scRNA_Celegans/data/worms.h5Seurat")
-
-# Using the convert function from SeuratDisk. This worked fine on the cluster
-# Convert("ad_worm_aging.h5ad", dest = "h5seurat")
-#worms <- LoadH5Seurat("D:/Harry_Jones/ad_worm_aging.h5seurat") # this does not seem to work
-#worms_filt <- subset(worms, nFeature_RNA > 100)
-
 # Only running this once as it takes a while
 #==========
 # Some QC
@@ -55,39 +61,57 @@ worms$percent.Largest.Gene <- 100 * worms$largest_count/worms$nCount_RNA
 
 save(worms, file="data/worms1.rds")
 
+```
+
+### QC plots
+
+```{r}
+# VlnPlot(
+# 	worms, 
+# 	features = c("nCount_RNA", "nFeature_RNA", "percent.MT", "percent.Ribosomal", "percent.Largest.Gene"),
+# 	cols =c("red", "blue2")
+# )
 
 VlnPlot(
 	worms, 
-	features = c("nCount_RNA", "nFeature_RNA", "percent.MT", "percent.Ribosomal", "percent.Largest.Gene")
-)
-
-VlnPlot(
-	worms, 
-	features = c("nCount_RNA", "nFeature_RNA", "percent.MT", "percent.Ribosomal", "percent.Largest.Gene")
+	features = c("nCount_RNA", "nFeature_RNA", "percent.MT", "percent.Ribosomal", "percent.Largest.Gene"),
+	pt.size=0
 ) +
 scale_y_log10()
 
+#hist(worms$percent.Largest.Gene)
 
+
+```
+
+```{r}
 qc.metrics <- as_tibble(
 	worms[[]],
 	rownames="Cell.Barcode"
 ) 
 
 head(qc.metrics)
+```
 
+```{r}
 qc.metrics %>%
 	arrange(percent.MT) %>%
 	ggplot(aes(nCount_RNA,nFeature_RNA,colour=percent.MT)) + 
 	geom_point() + 
 	scale_color_gradientn(colors=c("black","blue","green2","red","yellow")) +
 	ggtitle("QC metrics") +
-	geom_hline(yintercept = 750) +
-	geom_hline(yintercept = 2000) +
+	geom_hline(yintercept = 100) +
+	geom_hline(yintercept = 2500) +
 	scale_x_log10() + scale_y_log10()
 
 qc.metrics  <- qc.metrics %>%
 	mutate(complexity=log10(nFeature_RNA) / log10(nCount_RNA))  
+```
 
+
+### Complexity
+
+```{r}
 complexity.lm <- lm(log10(qc.metrics$nFeature_RNA)~log10(qc.metrics$nCount_RNA))
 
 complexity.lm
@@ -101,7 +125,6 @@ qc.metrics %>%
 	ggplot(aes(x=complexity_diff)) +
 	geom_density(fill="seagreen")
 
-
 complexity_scale <- min(c(max(qc.metrics$complexity_diff),0-min(qc.metrics$complexity_diff))) 
 
 qc.metrics %>%
@@ -114,8 +137,10 @@ qc.metrics %>%
 qc.metrics %>%
 	ggplot(aes(x=complexity_diff, y=percent.Largest.Gene)) +
 	geom_point() 
+```
 
 
+```{r}
 largest_gene_list <- qc.metrics %>%
 	group_by(largest_gene) %>%
 	count() %>%
@@ -173,8 +198,8 @@ qc.metrics %>%
 	ggplot(aes(nFeature_RNA)) + 
 	geom_histogram(fill="seagreen", binwidth = 50, colour="black") +
 	ggtitle("Distribution of nFeature_RNA") +
-	geom_vline(xintercept = 2000) +
-	geom_vline(xintercept = 180)
+	geom_vline(xintercept = 2500) +
+	geom_vline(xintercept = 100)
 
 qc.metrics %>%
 	ggplot(aes(x = timepoint, y=nFeature_RNA)) + 
@@ -186,58 +211,36 @@ qc.metrics %>%
 	geom_violin(fill="seagreen", colour="black") +
 	ggtitle("Distribution of nFeature_RNA") +
 	scale_y_log10() +
-	geom_hline(yintercept = c(180, 2000))
-
-# Filtering
-# worms <- subset(
-# 	worms,
-# 	nFeature_RNA>180 & 
-# 		nFeature_RNA < 2000 & 
-# 		percent.MT < 8 & 
-# 		percent.Largest.Gene < 30
-# ) 
-
-#worms <- NormalizeData(worms, normalization.method = "LogNormalize")
-
-gene.expression <- apply(worms@assays$RNA@data,1,mean)
-gene.expression <- sort(gene.expression, decreasing = TRUE)
-head(gene.expression, n=50)
-# we probably want to remove those first couple - one is rRNA
-
-# housekeeping genes
-#tba-1, Y45F10D.4 and pmp-3
-ggplot(mapping = aes(worms@assays$RNA@data["tba-1",])) + 
-	geom_histogram(binwidth = 0.05, fill="seagreen", colour="black") + 
-	ggtitle("")
-# that's a lot of 0 values 
-ggplot(mapping = aes(worms@assays$RNA@data["Y45F10D.4",])) + 
-	geom_histogram(binwidth = 0.05, fill="seagreen", colour="black") + 
-	ggtitle("")
-ggplot(mapping = aes(worms@assays$RNA@data["pmp-3",])) + 
-	geom_histogram(binwidth = 0.05, fill="seagreen", colour="black") + 
-	ggtitle("")
+	geom_hline(yintercept = c(100, 2500))
 
 
-as_tibble(
-	worms@assays$RNA@data[,1:100]
-) %>%
-	pivot_longer(
-		cols=everything(),
-		names_to="cell",
-		values_to="expression"
-	) %>%
-	ggplot(aes(x=expression, group=cell)) +
-	geom_density() #+
-	#coord_cartesian(ylim=c(0,0.6), xlim=c(0,3))
+```
+## Filtering 
 
+```{r}
+# Relaxed filtering so that we don't remove too much data that is potentially of interest.
+worms <- subset(
+	worms,
+	nFeature_RNA>100 &
+		nFeature_RNA < 2500 &
+		percent.MT < 8 &
+		percent.Largest.Gene < 40
+)
+
+```
+
+
+## Normalisation
+
+```{r, eval =FALSE}
 # way too many 0 values to use the simple normalisation
 # Normalise again, this time using a centered log ratio transformation - 
 # more similar to the sort of size factor based normalisation which is used for many RNA-Seq experiments. The margin=2 option means that it normalises per cell instead of per gene
 worms <- NormalizeData(worms, normalization.method = "CLR", margin = 2)
-
 save(worms, file = "data/clr_norm_worms_lax.rds")
+```
 
-
+```{r}
 as_tibble(
 	worms@assays$RNA@data[,1:100]
 ) %>%
@@ -261,60 +264,10 @@ normalisation.qc %>%
 	geom_point()+
 	ggtitle("Normalisation of data")
 
-# We should then do some cell cycle correction but I don't have a set of marker genes 
-# so we could come back to this.
-# http://www.wormbook.org/chapters/www_celldivision/celldivision.html
+```
 
-worms <- FindVariableFeatures(
-	worms, 
-	selection.method = "vst", 
-	nfeatures=500
-)
-
-variance.data <- as_tibble(HVFInfo(worms),rownames = "Gene") 
-
-variance.data <- variance.data %>% 
-	mutate(hypervariable=Gene %in% VariableFeatures(worms)
-	)
-
-head(variance.data, n=10)
-
-variance.data %>% 
-	ggplot(aes(log(mean),log(variance),color=hypervariable)) + 
-	geom_point() + 
-	scale_color_manual(values=c("black","red"))
-
-
+```{r}
 worms <- ScaleData(worms,features=rownames(data))
-save(worms, file = "data/clr_norm_scaled_worms.rds")
+save(worms, file = "data/clr_norm_scaled_worms_lax.rds")
+```
 
-
-RunPCA(worms,features=VariableFeatures(worms)) -> worms
-DimPlot(worms,reduction="pca")
-
-DimPlot(worms,reduction="pca", group.by = "largest_gene", label = TRUE, label.size = 3) + NoLegend()
-DimPlot(worms,reduction="pca", dims = c(3,4))
-# these look odd
-
-ElbowPlot(worms)
-
-DimHeatmap(worms,dims=1:20, cells=500)
-#DimHeatmap(worms,dims=21:30, cells=500)
-
-# worms <- RunTSNE(
-# 	worms,
-# 	dims=1:20,
-# 	perplexity=10,
-# 	check_duplicates = FALSE
-# ) # this took a long time
-
-#DimPlot(worms, reduction = "tsne", pt.size = 1) + ggtitle("tSNE with Perplexity 10")
-
-# worms <- RunTSNE(
-# 	worms,
-# 	dims=1:9,
-# 	perplexity=200,
-# 	check_duplicates = FALSE
-# ) # as did this
-
-#DimPlot(worms, reduction = "tsne", pt.size = 1) + ggtitle("tSNE with Perplexity 200")
