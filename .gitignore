@@ -3,3 +3,7 @@
 .RData
 .Ruserdata
 marker_genes.html
+data/clr_norm_scaled_worms.rds
+data/worms.h5Seurat
+data/clr_norm_worms.rds
+data/worms1.rds
