@@ -129,7 +129,61 @@ DT::datatable(intestine_markers)
 #show_up_genes(intestine_markers)
 ```
 
-Looking at vit-6 on the calcicolabs interface, it does seem to be a good marker, but cluster 3_5 has very little data and so does not show as being expressed at the later time points.
+Looking at vit-6 on the calicolabs interface, it does seem to be a good marker, but cluster 3_5 has very little data and so does not show as being expressed at the later time points.
+I'll start with this table and then add info to it:
+	- proportion of non 0 counts for each time point across all clusters of interest individually, then a summarised value
+		same but a summary value across all other clusters
+Add option to filter columns,
+2 decimal places
+		
+pct.1: The percentage of cells where the gene is detected in the first group
+
+pct.2: The percentage of cells where the gene is detected in the second group
+
+data always contains the log-normed version of counts
+
+
+```{r}
+#int <- rownames(intestine_markers)
+load("data/worm_counts_qc_filt.rds")
+int_mat <- worm_counts_qc_filt[rownames(intestine_markers),]
+
+# I'm assuming d5_1 and d5_2 are reps 1 and 2.
+intestine_tbl <- as_tibble(int_mat[,], rownames="gene") %>%
+	pivot_longer(cols=-gene) %>%
+	separate_wider_delim(cols=name, delim="_", names = c(NA, "day", "rep")) %>%
+  mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) 
+
+timepoint_pct <- intestine_tbl %>%
+	mutate(non_zero = value>0) %>%
+	group_by(gene, day) %>%
+	summarise(
+	  n = n(),
+	  non_zero_count = sum(non_zero)
+	) %>%
+	ungroup() %>%
+	mutate(pct = 100*(non_zero_count/n)) %>%
+	select(-n, -non_zero_count) 
+
+timepoint_mins <- timepoint_pct %>%
+	group_by(gene) %>%
+	summarise(min_day = min(pct))
+
+timepoint_pct <- timepoint_pct %>%
+	pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_") %>%
+	left_join(timepoint_mins)
+#show_up_genes(intestine_markers)
+```
+
+```{r}
+intestine_info <- intestine_markers %>%
+	tibble::rownames_to_column(var = "gene") %>%
+	full_join(timepoint_pct) 
+
+intestine_info %>%
+	DT::datatable(rownames = FALSE, filter = "top") %>%
+	formatRound(columns=2:ncol(intestine_info), digits=3)
+```
 
 ### body wall muscle
 

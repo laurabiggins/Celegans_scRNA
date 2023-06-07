@@ -65,6 +65,8 @@ save(worm_counts_raw, file = "data/worm_counts_raw.rds")
 # only running this once as it uses a lot of memory
 load("data/clr_norm_scaled_worms.rds")
 worm_counts_qc_filt <- worms@assays$RNA@counts
+worm_data_qc_filt <- worms@assays$RNA@data
+save(worm_data_qc_filt, file = "data/worm_data_qc_filt.rds")
 save(worm_counts_qc_filt, file = "data/worm_counts_qc_filt.rds")
 rm(worms) # it's big so we don't want to keep it in memory if we don't need it
 ```
@@ -104,6 +106,7 @@ summarised_inc0 <- intestine_tbl %>%
 	  mean = mean(value),
 	  median = median(value),
 	  sd = sd(value)
+	  
 	) %>%
 	ungroup()
 
