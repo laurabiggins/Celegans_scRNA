@@ -1,0 +1,147 @@
+---
+title: "Tables of marker genes"
+date: "2023-06-08"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+first_run <- FALSE
+library(tidyverse)
+```
+
+```{r functions, eval=first_run}
+# Taking the code from marker_genes.Rmd and putting it in a function so we can 
+# use for all tissues of interest.
+get_timepoint_non_zeros <- function(marker_matrix){
+
+	# I'm assuming d5_1 and d5_2 are reps 1 and 2.
+	as_tibble(marker_matrix[,], rownames="gene") %>%
+		pivot_longer(cols=-gene) %>%
+		separate_wider_delim(cols=name, delim="_", names = c(NA, "day", "rep")) %>%
+	  mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) %>%
+		mutate(non_zero = value>0) %>%
+		group_by(gene, day) %>%
+		summarise(
+		  n = n(),
+		  non_zero_count = sum(non_zero)
+		) %>%
+		ungroup() %>%
+		mutate(pct = 100*(non_zero_count/n)) %>%
+		select(-n, -non_zero_count) 
+}
+	
+add_min_column <- function(timepoint_non_zeros){
+	timepoint_non_zeros %>%
+		group_by(gene) %>%
+		summarise(min_day = min(pct)) %>%
+		ungroup()
+}
+	
+timepoint_wrapper <- function(count_table, marker_genes){
+	
+	marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
+	non_zeros <- get_timepoint_non_zeros(marker_matrix)
+	timepoint_mins <- add_min_column(non_zeros)
+	
+	non_zeros <- non_zeros %>%
+		pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_") %>%
+		left_join(timepoint_mins)
+	
+	marker_genes %>%
+		tibble::rownames_to_column(var = "gene") %>%
+		full_join(non_zeros) 
+}
+```
+
+```{r DT_format_function}
+formatDT <- function(tbl){
+	tbl %>%
+		relocate(gene, pct.1, pct.2, myAUC, power, min_day) %>%
+		relocate(avg_diff, avg_log2FC, .after=last_col()) %>%
+		DT::datatable(rownames = FALSE, filter = "top") %>%
+		DT::formatRound(columns=2:ncol(tbl), digits=3)
+}
+```
+
+```{r, eval = first_run}
+load("data/clr_norm_scaled_worms_lax.rds")
+worm_counts_qc_filt_lax <- worms@assays$RNA@counts
+save(worm_counts_qc_filt_lax, file = "data/worm_counts_qc_filt_lax.rds")
+```
+
+```{r, eval=first_run}
+# process the data once to get the timepoint info
+load("data/worm_counts_qc_filt_lax.rds")
+load("data/intestine_markers_roc.rds")
+load("data/body_wall_muscle_markers_roc.rds")
+load("data/pharynx_markers_roc.rds")
+load("data/neuron_markers_roc.rds")
+
+intestine_table <- timepoint_wrapper(worm_counts_qc_filt_lax, intestine_markers)
+bw_table <- timepoint_wrapper(worm_counts_qc_filt_lax, body_wall_muscle_markers)
+pharynx_table <- timepoint_wrapper(worm_counts_qc_filt_lax, pharynx_markers)
+neuron_table <- timepoint_wrapper(worm_counts_qc_filt_lax, neuron_markers)
+
+save(intestine_table, file = "data/intestine_table.rds")
+save(bw_table, file = "data/bw_table.rds")
+save(pharynx_table, file = "data/pharynx_table.rds")
+save(neuron_table, file = "data/neuron_table.rds")
+```
+
+```{r}
+load("data/intestine_table.rds")
+load("data/bw_table.rds")
+load("data/pharynx_table.rds")
+load("data/neuron_table.rds")
+```
+
+The FindMarkers function in Seurat has been rerun, using the ROC analysis option rather than the default wilcox test. This should be more effective at finding specific markers and also provides more metrics for filtering on. The tables below show the outputs of these tests, along with some additional information for the different timepoints.
+
+Column information:
+
+-   pct.1: The percentage of cells where the gene is detected in the first group. The `first group` includes all of the cells in the clusters specified for that tissue. These are the clusters in green from Harry's Excel file for intestine, body wall muscle and pharynx, and all of the clusters for neurons in the Excel file.
+
+-   pct.2: The percentage of cells where the gene is detected in the second group, where the second group refers to all the remaining cells that are not in the first group.
+
+-   myAUC: Output from the ROC analysis. Info taken from the FindMarkers documentation: "For each gene, evaluates (using AUC) a classifier built on that gene alone, to classify between two groups of cells. An AUC value of 1 means that expression values for this gene alone can perfectly classify the two groupings (i.e. Each of the cells in cells.1 exhibit a higher level than each of the cells in cells.2). An AUC value of 0 also means there is perfect classification, but in the other direction. A value of 0.5 implies that the gene has no predictive power to classify the two groups. Returns a 'predictive power' (abs(AUC-0.5) * 2) ranked matrix of putative differentially expressed genes."  
+	We only have AUC values \> 0.5 as we were only testing in one direction.
+
+-   power: predictive power as described above
+
+-   min_day: The minimum value of the following 6 columns - added to enable further filtering
+
+-   non0_d1, non0_d3 etc.: These columns have been added to show information for the individual timepoints. They contain the percentage of cells with non zero counts for that gene and timepoint. These values have been computed from the raw count data and so differ from the pct.1 values.
+
+-   avg_diff, avg_log2FC: Outputs from the FindMarkers function providing information on differences between group 1 and group 2.
+
+The table is sorted by default by AUC/power, so that the genes at the top should be the best distinguishing markers overall, though they are not necessarily expressed at high levels in all timepoints. The table can be re-sorted by clicking on any column header. Additionally, each of the columns can be filtered by clicking in the box below the column header. This means that minimum/maximum values could be set for any of the columns.
+
+# Intestine
+
+```{r}
+formatDT(intestine_table)
+```
+    
+    
+# Body wall muscle
+
+```{r}
+formatDT(bw_table)
+```
+   
+   
+# Pharynx
+
+```{r}
+formatDT(pharynx_table)
+```
+   
+   
+# Neurons
+
+```{r}
+formatDT(neuron_table)
+```
