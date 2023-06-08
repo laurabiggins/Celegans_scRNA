@@ -11,18 +11,19 @@ library(Seurat)
 library(SeuratDisk)
 ```
 
-## R Markdown
-
 I read it in on the cluster using the anndata package
 w <- anndata::read_h5ad("ad_worm_aging.h5ad")
 
-
+```{r load}
+#To load the Seurat object:
+#worms <- LoadH5Seurat("D:/Harry_Jones/scRNA_Celegans/data/worms.h5Seurat")
+worms <- LoadH5Seurat("D:/Harry_Jones/worms.h5Seurat")
+# Only running this once as it takes a while
+```
 
 
 ```{r QC}
-#To load the Seurat object:
-worms <- LoadH5Seurat("D:/Harry_Jones/scRNA_Celegans/data/worms.h5Seurat")
-# Only running this once as it takes a while
+# 
 #==========
 # Some QC
 #==========
@@ -218,6 +219,7 @@ qc.metrics %>%
 ## Filtering 
 
 ```{r}
+load("data/worms1.rds")
 # Relaxed filtering so that we don't remove too much data that is potentially of interest.
 worms <- subset(
 	worms,
@@ -241,6 +243,8 @@ save(worms, file = "data/clr_norm_worms_lax.rds")
 ```
 
 ```{r}
+load("data/clr_norm_worms_lax.rds")
+
 as_tibble(
 	worms@assays$RNA@data[,1:100]
 ) %>%
