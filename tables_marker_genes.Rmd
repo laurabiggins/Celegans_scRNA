@@ -15,11 +15,13 @@ library(tidyverse)
 ```{r functions, eval=first_run}
 # Taking the code from marker_genes.Rmd and putting it in a function so we can 
 # use for all tissues of interest.
-get_timepoint_non_zeros <- function(marker_matrix){
+
+get_timepoint_non_zeros <- function(marker_matrix, clusters_of_interest){
 
 	# I'm assuming d5_1 and d5_2 are reps 1 and 2.
 	as_tibble(marker_matrix[,], rownames="gene") %>%
 		pivot_longer(cols=-gene) %>%
+		filter(name %in% clusters_of_interest) %>%
 		separate_wider_delim(cols=name, delim="_", names = c(NA, "day", "rep")) %>%
 	  mutate(day = factor(day, levels = c("d1","d3","d5","d8","d11","d15"))) %>%
 		mutate(non_zero = value>0) %>%
@@ -40,10 +42,10 @@ add_min_column <- function(timepoint_non_zeros){
 		ungroup()
 }
 	
-timepoint_wrapper <- function(count_table, marker_genes){
+timepoint_wrapper <- function(count_table, marker_genes, clusters_of_interest){
 	
 	marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
-	non_zeros <- get_timepoint_non_zeros(marker_matrix)
+	non_zeros <- get_timepoint_non_zeros(marker_matrix, clusters_of_interest)
 	timepoint_mins <- add_min_column(non_zeros)
 	
 	non_zeros <- non_zeros %>%
@@ -66,7 +68,7 @@ formatDT <- function(tbl){
 }
 ```
 
-```{r, eval = first_run}
+```{r, eval = FALSE}
 load("data/clr_norm_scaled_worms_lax.rds")
 worm_counts_qc_filt_lax <- worms@assays$RNA@counts
 save(worm_counts_qc_filt_lax, file = "data/worm_counts_qc_filt_lax.rds")
@@ -79,11 +81,30 @@ load("data/intestine_markers_roc.rds")
 load("data/body_wall_muscle_markers_roc.rds")
 load("data/pharynx_markers_roc.rds")
 load("data/neuron_markers_roc.rds")
+load("data/cluster_names.rds")
 
-intestine_table <- timepoint_wrapper(worm_counts_qc_filt_lax, intestine_markers)
-bw_table <- timepoint_wrapper(worm_counts_qc_filt_lax, body_wall_muscle_markers)
-pharynx_table <- timepoint_wrapper(worm_counts_qc_filt_lax, pharynx_markers)
-neuron_table <- timepoint_wrapper(worm_counts_qc_filt_lax, neuron_markers)
+of_interest <- grepl("^3_[1245]", cluster_names) # intestine
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+intestine_table <- timepoint_wrapper(worm_counts_qc_filt_lax, intestine_markers, x)
+
+name_pattern <- "^4_[012]|^1_1"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+bw_table <- timepoint_wrapper(worm_counts_qc_filt_lax, body_wall_muscle_markers, x)
+
+name_pattern <- "^26_[012]|^24_1|^41_0|^78_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+pharynx_table <- timepoint_wrapper(worm_counts_qc_filt_lax, pharynx_markers, x)
+
+name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+neuron_table <- timepoint_wrapper(worm_counts_qc_filt_lax, neuron_markers, x)
 
 save(intestine_table, file = "data/intestine_table.rds")
 save(bw_table, file = "data/bw_table.rds")
@@ -96,6 +117,7 @@ load("data/intestine_table.rds")
 load("data/bw_table.rds")
 load("data/pharynx_table.rds")
 load("data/neuron_table.rds")
+load("data/cluster_names.rds")
 ```
 
 The FindMarkers function in Seurat has been rerun, using the ROC analysis option rather than the default wilcox test. This should be more effective at finding specific markers and also provides more metrics for filtering on. The tables below show the outputs of these tests, along with some additional information for the different timepoints.
@@ -145,3 +167,39 @@ formatDT(pharynx_table)
 ```{r}
 formatDT(neuron_table)
 ```
+
+# Checking the cluster names
+
+## Intestine  
+
+```{r}
+of_interest <- grepl("^3_[1245]", cluster_names) # intestine
+unique(cluster_names[of_interest])
+
+```
+
+## Body wall muscle   
+
+```{r}
+name_pattern <- "^4_[012]|^1_1"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+```
+
+## Pharynx  
+
+```{r}
+name_pattern <- "^26_[012]|^24_1|^41_0|^78_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+```
+
+## Neurons  
+
+```{r}
+name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+```
+
+

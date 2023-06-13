@@ -22,6 +22,7 @@ load("data/clr_norm_scaled_worms_lax.rds")
 
 meta <- worms@meta.data
 cluster_names <- as.character(meta$annotate_name)
+save(cluster_names, file="data/cluster_names.rds")
 ```
 
 
