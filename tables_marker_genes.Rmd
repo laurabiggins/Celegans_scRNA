@@ -1,6 +1,6 @@
 ---
 title: "Tables of marker genes"
-date: "2023-06-08"
+date: "2023-06-14"
 output:
   html_document:
     code_folding: hide
@@ -71,6 +71,8 @@ formatDT <- function(tbl){
 ```{r, eval = FALSE}
 load("data/clr_norm_scaled_worms_lax.rds")
 worm_counts_qc_filt_lax <- worms@assays$RNA@counts
+meta <- worms@meta.data
+save(meta, file = "data/worm_meta.rds")
 save(worm_counts_qc_filt_lax, file = "data/worm_counts_qc_filt_lax.rds")
 ```
 
@@ -82,6 +84,7 @@ load("data/body_wall_muscle_markers_roc.rds")
 load("data/pharynx_markers_roc.rds")
 load("data/neuron_markers_roc.rds")
 load("data/cluster_names.rds")
+load("data/worms_meta.rds")
 
 of_interest <- grepl("^3_[1245]", cluster_names) # intestine
 unique(cluster_names[of_interest])
@@ -100,7 +103,7 @@ unique(cluster_names[of_interest])
 x <- rownames(meta[of_interest , ])
 pharynx_table <- timepoint_wrapper(worm_counts_qc_filt_lax, pharynx_markers, x)
 
-name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
+name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35_[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
 of_interest <- grepl(name_pattern, cluster_names)
 unique(cluster_names[of_interest])
 x <- rownames(meta[of_interest , ])
@@ -124,9 +127,9 @@ The FindMarkers function in Seurat has been rerun, using the ROC analysis option
 
 Column information:
 
--   pct.1: The percentage of cells where the gene is detected in the first group. The `first group` includes all of the cells in the clusters specified for that tissue. These are the clusters in green from Harry's Excel file for intestine, body wall muscle and pharynx, and all of the clusters for neurons in the Excel file.
+-   pct.1: The proportion of cells where the gene is detected in the first group. The `first group` includes all of the cells in the clusters specified for that tissue. These are the clusters in green from Harry's Excel file for intestine, body wall muscle and pharynx, and all of the clusters for neurons in the Excel file.
 
--   pct.2: The percentage of cells where the gene is detected in the second group, where the second group refers to all the remaining cells that are not in the first group.
+-   pct.2: The proportion of cells where the gene is detected in the second group, where the second group refers to all the remaining cells that are not in the first group.
 
 -   myAUC: Output from the ROC analysis. Info taken from the FindMarkers documentation: "For each gene, evaluates (using AUC) a classifier built on that gene alone, to classify between two groups of cells. An AUC value of 1 means that expression values for this gene alone can perfectly classify the two groupings (i.e. Each of the cells in cells.1 exhibit a higher level than each of the cells in cells.2). An AUC value of 0 also means there is perfect classification, but in the other direction. A value of 0.5 implies that the gene has no predictive power to classify the two groups. Returns a 'predictive power' (abs(AUC-0.5) * 2) ranked matrix of putative differentially expressed genes."  
 	We only have AUC values \> 0.5 as we were only testing in one direction.
@@ -135,7 +138,7 @@ Column information:
 
 -   min_day: The minimum value of the following 6 columns - added to enable further filtering
 
--   non0_d1, non0_d3 etc.: These columns have been added to show information for the individual timepoints. They contain the percentage of cells with non zero counts for that gene and timepoint. These values have been computed from the raw count data and so differ from the pct.1 values.
+-   non0_d1, non0_d3 etc.: These columns have been added to show information for the individual timepoints. They contain the percentage of cells with non zero counts for the gene and timepoint in the tissue of interest.
 
 -   avg_diff, avg_log2FC: Outputs from the FindMarkers function providing information on differences between group 1 and group 2.
 
@@ -197,9 +200,29 @@ unique(cluster_names[of_interest])
 ## Neurons  
 
 ```{r}
-name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
+name_pattern <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35_[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
 of_interest <- grepl(name_pattern, cluster_names)
-unique(cluster_names[of_interest])
+
+no <- tibble::tibble(cluster_name = unique(cluster_names[of_interest])) %>%
+	tidyr::separate_wider_delim(cluster_name, delim = ":", names=c("cluster_no", "cluster_name")) %>%
+	pull(cluster_no)
+
+#unique(cluster_names[of_interest])
+
+tibble::tibble(cluster_name = unique(cluster_names[of_interest])) %>%
+	tidyr::separate_wider_delim(cluster_name, delim = ":", names=c("cluster_no", "cluster_name")) %>%
+	tidyr::separate_wider_delim(cluster_no, delim="_", names=c("first_no", "second_no")) %>%
+	dplyr::mutate(first_no = as.numeric(first_no)) %>%
+	arrange(first_no, second_no) %>%
+	tidyr::unite(col="numbers", first_no, second_no, sep="_") %>%
+	tidyr::unite(col="cluster", numbers, cluster_name, sep=":") %>%
+	pull(cluster)
+# DT::datatable(rownames = FALSE)
+
+
+# checking against the set from Excel	
+#neuron_clusters <- paste0("cluster_", no)
+	
 ```
 
 
