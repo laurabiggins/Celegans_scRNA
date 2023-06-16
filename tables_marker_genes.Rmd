@@ -227,13 +227,15 @@ tibble::tibble(cluster_name = unique(cluster_names[of_interest])) %>%
 
 # Extended sets of clusters
 
+## Intestine_extended
+
 ```{r}
 name_pattern <- "^3_[1245]|^30_[04]|^1_2|^38_0"
 of_interest <- grepl(name_pattern, cluster_names) # intestine
 unique(cluster_names[of_interest])
 ```
 
-## Body wall muscle   
+## Body wall muscle extended
 
 ```{r}
 name_pattern <- "^4_[012]|^1_1|^7_[01]|^143_0"
@@ -241,13 +243,34 @@ of_interest <- grepl(name_pattern, cluster_names)
 unique(cluster_names[of_interest])
 ```
 
-## Pharynx  
+## Pharynx extended
 
 ```{r}
-name_pattern <- "^26_[012]|^24_1|^41_0|^78_0|^1_0|^9_[012]|^15_0|^24_0|^30_4|^41_1"
+name_pattern <- "^1_0|^26_[012]|^24_1|^41_0|^78_0|^9_[012]|^15_0|^24_0|^41_1"
 of_interest <- grepl(name_pattern, cluster_names)
 unique(cluster_names[of_interest])
 ```
+
+
+# Other clusters
+```{r}
+epithelium <- "^11_[12]|^13_1|^27_0|^41_2|^57_0|^68_1|^146_0"
+glia <- "^5_[01]|^16_0|^21_0|^30_5|^34_[01]|^37_0|^45_0|^79_[02]|^88_0|^141_0"
+hypodermis <- "^8_0|^30_[12]|^33_[01]|^2_0|^64_0"
+muscle_excl_bw_pharyngeal <- "^7_[234]|^38_[123]|^102_0"
+gonad <- "^18_0|^31_0|^43_0"
+germline <- "^3_[03]|^57_1"
+mesoderm <- "^23_0|^110_1|^119_0"
+coelomocyte <- "^110_0|^12_0"
+gland <- "^89_0|^30_3"
+seam <- "^0_0|^11_3"
+valve <- "^60_0"
+vulva <- "^11_0"
+excretory <- "^40_0"
+other <- "^13_0|^21_1|^42_0|^82_[01]"
+other_neurons <- "^5[369]_0|^58_[01]|^67_0|^9[56]_0|^105_0|^116_0|^12[456]_0|^139_0"
+
+
 
 
 
