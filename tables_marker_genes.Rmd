@@ -225,4 +225,31 @@ tibble::tibble(cluster_name = unique(cluster_names[of_interest])) %>%
 	
 ```
 
+# Extended sets of clusters
+
+```{r}
+name_pattern <- "^3_[1245]|^30_[04]|^1_2|^38_0"
+of_interest <- grepl(name_pattern, cluster_names) # intestine
+unique(cluster_names[of_interest])
+```
+
+## Body wall muscle   
+
+```{r}
+name_pattern <- "^4_[012]|^1_1|^7_[01]|^143_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+```
+
+## Pharynx  
+
+```{r}
+name_pattern <- "^26_[012]|^24_1|^41_0|^78_0|^1_0|^9_[012]|^15_0|^24_0|^30_4|^41_1"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+```
+
+
+
+
 
