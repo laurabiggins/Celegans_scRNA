@@ -357,6 +357,41 @@ formatDT_no_relocate(neuron_markers_all)
 ```
 
 
+```{r Excel_export, eval=FALSE}
+library(xlsx)
+write.xlsx(
+	intestine_markers_all, 
+	file="marker_genes.xlsx",
+	sheetName = "Intestine",
+	row.names = FALSE
+)
+
+write.xlsx(
+	bw_markers_all, 
+	file="marker_genes.xlsx",
+	sheetName = "Body wall muscle",
+	append = TRUE,
+	row.names = FALSE
+)
+
+write.xlsx(
+	pharynx_markers_all, 
+	file="marker_genes.xlsx",
+	sheetName = "Pharynx",
+	append = TRUE,
+	row.names = FALSE
+)
+
+write.xlsx(
+	neuron_markers_all, 
+	file="marker_genes.xlsx",
+	sheetName = "Neurons",
+	append = TRUE,
+	row.names = FALSE
+)
+
+```
+
 ## Table information
 
 The FindMarkers function in Seurat has been run, using the ROC analysis option rather than the default wilcox test. This should be more effective at finding specific markers and also provides more metrics for filtering on. The tables below show the outputs of these tests, along with some additional information for the different timepoints.
