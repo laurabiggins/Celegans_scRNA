@@ -4,18 +4,26 @@ date: "2023-06-14"
 output:
   html_document:
     code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
 first_run <- FALSE
 library(tidyverse)
+
+load("data/intestine_table.rds")
+load("data/bw_table.rds")
+load("data/pharynx_table.rds")
+load("data/neuron_table.rds")
+load("data/cluster_names.rds")
 ```
 
-```{r functions, eval=first_run}
-# Taking the code from marker_genes.Rmd and putting it in a function so we can 
-# use for all tissues of interest.
+I tried rerunning the ROC analysis, this time including the clusters in white (from the Excel sheet) for the tissues of interest. Overall, this didn't seem to help the analysis, so for the main tables, I went back to running the ROC analysis on the clusters highlighted in green. The [results from the extended sets](#extended_clusters) can be seen further down the page. 
+The clusters in white for the tissues of interest are named `intestine_other`, `bw_other` and `pharynx_other`.
 
+```{r functions, eval=TRUE}
 get_timepoint_non_zeros <- function(marker_matrix, clusters_of_interest){
 
 	# I'm assuming d5_1 and d5_2 are reps 1 and 2.
@@ -56,9 +64,7 @@ timepoint_wrapper <- function(count_table, marker_genes, clusters_of_interest){
 		tibble::rownames_to_column(var = "gene") %>%
 		full_join(non_zeros) 
 }
-```
 
-```{r DT_format_function}
 formatDT <- function(tbl){
 	tbl %>%
 		relocate(gene, pct.1, pct.2, myAUC, power, min_day) %>%
@@ -66,6 +72,13 @@ formatDT <- function(tbl){
 		DT::datatable(rownames = FALSE, filter = "top") %>%
 		DT::formatRound(columns=2:ncol(tbl), digits=3)
 }
+
+formatDT_no_relocate <- function(tbl){
+	tbl %>%
+		DT::datatable(rownames = FALSE, filter = "top", options = list(scrollX = TRUE)) %>%
+		DT::formatRound(columns=2:ncol(tbl), digits=3)
+}
+
 ```
 
 ```{r, eval = FALSE}
@@ -84,7 +97,7 @@ load("data/body_wall_muscle_markers_roc.rds")
 load("data/pharynx_markers_roc.rds")
 load("data/neuron_markers_roc.rds")
 load("data/cluster_names.rds")
-load("data/worms_meta.rds")
+load("data/worm_meta.rds")
 
 of_interest <- grepl("^3_[1245]", cluster_names) # intestine
 unique(cluster_names[of_interest])
@@ -115,15 +128,238 @@ save(pharynx_table, file = "data/pharynx_table.rds")
 save(neuron_table, file = "data/neuron_table.rds")
 ```
 
-```{r}
-load("data/intestine_table.rds")
-load("data/bw_table.rds")
-load("data/pharynx_table.rds")
-load("data/neuron_table.rds")
-load("data/cluster_names.rds")
+# Classification of clusters
+
+We want to include a breakdown of expression across all tissues, so we're using all the annotated clusters and grouping them more generally into tissues.
+
+```{r, echo =TRUE}
+intestine_other <- "^30_[04]|^1_2|^38_0"
+bw_other <- "^7_[01]|^143_0"
+pharynx_other <- "^1_0|^9_[012]|^15_0|^24_0|^41_1"
+epithelium <- "^11_[12]|^13_1|^27_0|^41_2|^57_0|^68_1|^146_0"
+glia <- "^5_[01]|^16_0|^21_0|^30_5|^34_[01]|^37_0|^45_0|^79_[02]|^88_0|^141_0"
+hypodermis <- "^8_0|^30_[12]|^33_[01]|^2_0|^64_0"
+muscle_excl_bw_pharyngeal <- "^7_[234]|^38_[123]|^102_0"
+gonad <- "^18_0|^31_0|^43_0"
+germline <- "^3_[03]|^57_1"
+mesoderm <- "^23_0|^110_1|^119_0"
+coelomocyte <- "^110_0|^12_0"
+gland <- "^89_0|^30_3"
+seam <- "^0_0|^11_3"
+valve <- "^60_0"
+vulva <- "^11_0"
+excretory <- "^79_1"
+endocrine <- "^40_0"
+other <- "^13_0|^21_1|^42_0|^82_[01]"
+other_neurons <- "^5[369]_0|^58_[01]|^67_0|^9[56]_0|^105_0|^116_0|^12[456]_0|^139_0"
+
+intestine <- "^3_[1245]"
+body_wall <- "^4_[012]|^1_1"
+pharynx <- "^26_[012]|^24_1|^41_0|^78_0"
+neurons <- "^6_[0123]|^10_0|^14_[012]|^1[79]_0|^20_[012]|^22_0|^25_[01]|^2[89]_0|^32_0|^35_[01234]|^36_[023]|^39_[0123]|^44_[01]|^46_0|^47_[01]|^4[89]_0|^5[01245]_0|^51_1|^6[1235689]_0|^70_[01]|^7[1234567]_0|^8[0134567]_0|^9[01234789]_0|^10[01346789]_0|^11[1234578]_0|^12[0123789]_0|^13[012345678]_0|^14[0245]_0"
 ```
 
-The FindMarkers function in Seurat has been rerun, using the ROC analysis option rather than the default wilcox test. This should be more effective at finding specific markers and also provides more metrics for filtering on. The tables below show the outputs of these tests, along with some additional information for the different timepoints.
+
+```{r}
+load("data/worm_counts_qc_filt_lax.rds")
+load("data/worm_meta.rds")
+
+all_clusters_categorised <- tibble::tibble(
+	cluster_name = meta$annotate_name) %>%
+	add_column("cell_name" = colnames(worm_counts_qc_filt_lax)) %>%
+	mutate(
+		category = case_when(
+			grepl(intestine_other, cluster_names) ~ "intestine_other",
+			grepl(bw_other, cluster_names) ~ "bw_other",
+			grepl(pharynx_other, cluster_names) ~ "pharynx_other",
+			grepl(epithelium, cluster_names) ~ "epithelium",
+			grepl(glia, cluster_names) ~ "glia",
+			grepl(hypodermis, cluster_names) ~ "hypodermis",
+			grepl(muscle_excl_bw_pharyngeal, cluster_names) ~ "muscle_excl_bw_pharyngeal",
+			grepl(gonad, cluster_names) ~ "gonad",
+			grepl(germline, cluster_names) ~ "germline",
+			grepl(mesoderm, cluster_names) ~ "mesoderm",
+			grepl(coelomocyte, cluster_names) ~ "coelomocyte",
+			grepl(gland, cluster_names) ~ "gland",
+			grepl(seam, cluster_names) ~ "seam",
+			grepl(valve, cluster_names) ~ "valve",
+			grepl(vulva, cluster_names) ~ "vulva",
+			grepl(excretory, cluster_names) ~ "excretory",
+			grepl(endocrine, cluster_names) ~ "endocrine",
+			grepl(other, cluster_names) ~ "other",
+			grepl(other_neurons, cluster_names) ~ "other_neurons",
+			grepl(intestine, cluster_names) ~ "intestine",
+			grepl(body_wall, cluster_names) ~ "body_wall",
+			grepl(pharynx, cluster_names) ~ "pharynx",
+			grepl(neurons, cluster_names) ~ "neurons", 
+			.default = "not_matched"
+		)
+	)
+
+knitr::kable(head(all_clusters_categorised))
+```
+
+All of the `r nrow(all_clusters_categorised)` cells in this dataset seem to have been identified, the table above just shows the first few lines.
+ 
+## Number of cells in each cluster
+
+```{r}
+all_clusters_categorised %>%
+	group_by(category) %>%
+	count(name="number of cells") %>%
+	arrange(desc(`number of cells`)) %>%
+	DT::datatable(rownames = FALSE)
+```
+
+
+
+```{r}
+load("data/intestine_markers_roc.rds")
+load("data/body_wall_muscle_markers_roc.rds")
+load("data/pharynx_markers_roc.rds")
+load("data/neuron_markers_roc.rds")
+load("data/cluster_names.rds")
+
+get_all_tissues_non0 <- function(marker_matrix){
+	as_tibble(marker_matrix[,], rownames="gene") %>%
+	pivot_longer(cols=-gene, names_to = "cell_name") %>%
+	left_join(all_clusters_categorised) %>%
+	mutate(non_zero = value>0) %>%
+	group_by(gene, category) %>%
+	summarise(
+	  n = n(),
+	  non_zero_count = sum(non_zero)
+	) %>%
+	ungroup() %>%
+	mutate(pct = 100*(non_zero_count/n)) %>%
+	select(-n, -non_zero_count) %>%
+	pivot_wider(names_from=category, values_from = pct) 
+}
+
+count_table <- worm_counts_qc_filt_lax
+```
+
+```{r, intestine}
+marker_genes <- intestine_markers
+marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
+
+non_zeros <- get_all_tissues_non0(marker_matrix) %>%
+	relocate(intestine, intestine_other, .after=gene)
+	
+all_tissues <- marker_genes %>%
+	tibble::rownames_to_column(var = "gene") %>%
+	full_join(non_zeros) %>%
+	relocate(gene, pct.1, pct.2, myAUC, power) %>%
+	relocate(avg_diff, avg_log2FC, .after=last_col())
+
+cells_of_interest <- filter(all_clusters_categorised, category == "intestine") %>% pull(cell_name)
+	
+non_zero_days <- get_timepoint_non_zeros(marker_matrix, cells_of_interest) %>%
+	filter(day != "d15") %>%
+	pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_")
+
+intestine_markers_all <- full_join(all_tissues, non_zero_days)
+```
+
+```{r, bw}
+marker_genes <- body_wall_muscle_markers
+marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
+
+non_zeros <- get_all_tissues_non0(marker_matrix) %>%
+	relocate(body_wall, bw_other, .after=gene)
+	
+all_tissues <- marker_genes %>%
+	tibble::rownames_to_column(var = "gene") %>%
+	full_join(non_zeros) %>%
+	relocate(gene, pct.1, pct.2, myAUC, power) %>%
+	relocate(avg_diff, avg_log2FC, .after=last_col())
+
+cells_of_interest <- filter(all_clusters_categorised, category == "body_wall") %>% pull(cell_name)
+	
+non_zero_days <- get_timepoint_non_zeros(marker_matrix, cells_of_interest) %>%
+	filter(day != "d15") %>%
+	pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_")
+
+bw_markers_all <- full_join(all_tissues, non_zero_days)
+```
+
+```{r, pharynx}
+marker_genes <- pharynx_markers
+marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
+
+non_zeros <- get_all_tissues_non0(marker_matrix) %>%
+	relocate(pharynx, pharynx_other, .after=gene)
+
+all_tissues <- marker_genes %>%
+	tibble::rownames_to_column(var = "gene") %>%
+	full_join(non_zeros) %>%
+	relocate(gene, pct.1, pct.2, myAUC, power) %>%
+	relocate(avg_diff, avg_log2FC, .after=last_col())
+
+cells_of_interest <- filter(all_clusters_categorised, category == "pharynx") %>% pull(cell_name)
+	
+non_zero_days <- get_timepoint_non_zeros(marker_matrix, cells_of_interest) %>%
+	filter(day != "d15") %>%
+	pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_")
+
+pharynx_markers_all <- full_join(all_tissues, non_zero_days)
+```
+
+```{r, neurons}
+marker_genes <- neuron_markers
+marker_matrix <- as.matrix(count_table[rownames(marker_genes),])
+
+non_zeros <- get_all_tissues_non0(marker_matrix) %>%
+	relocate(neurons, other_neurons, .after=gene)
+
+all_tissues <- marker_genes %>%
+	tibble::rownames_to_column(var = "gene") %>%
+	full_join(non_zeros) %>%
+	relocate(gene, pct.1, pct.2, myAUC, power) %>%
+	relocate(avg_diff, avg_log2FC, .after=last_col())
+
+cells_of_interest <- filter(all_clusters_categorised, category == "neurons") %>% pull(cell_name)
+	
+non_zero_days <- get_timepoint_non_zeros(marker_matrix, cells_of_interest) %>%
+	filter(day != "d15") %>%
+	pivot_wider(names_from = day, values_from = pct, names_prefix = "non0_")
+
+neuron_markers_all <- full_join(all_tissues, non_zero_days)
+```
+   
+In the set of tables below we've now got the percentage of non zero counts for all tissues for each of the marker genes.
+The columns named non0_dx (at the far right of the tables) still contain the percentage of cells with non zero counts for the gene and timepoint in the tissue of interest.
+
+# Main results tables
+
+## Intestine 
+
+```{r}
+formatDT_no_relocate(intestine_markers_all)
+```
+
+## Body wall muscle
+
+```{r}
+formatDT_no_relocate(bw_markers_all)
+```
+
+## Pharynx
+
+```{r}
+formatDT_no_relocate(pharynx_markers_all)
+```
+
+## Neurons
+
+```{r}
+formatDT_no_relocate(neuron_markers_all)
+```
+
+
+## Table information
+
+The FindMarkers function in Seurat has been run, using the ROC analysis option rather than the default wilcox test. This should be more effective at finding specific markers and also provides more metrics for filtering on. The tables below show the outputs of these tests, along with some additional information for the different timepoints.
 
 Column information:
 
@@ -144,32 +380,79 @@ Column information:
 
 The table is sorted by default by AUC/power, so that the genes at the top should be the best distinguishing markers overall, though they are not necessarily expressed at high levels in all timepoints. The table can be re-sorted by clicking on any column header. Additionally, each of the columns can be filtered by clicking in the box below the column header. This means that minimum/maximum values could be set for any of the columns.
 
-# Intestine
+    
+
+# Extended cluster sets {#extended_clusters}
+
+I tried running the ROC analysis including the clusters in white from the Excel sheet. Overall, this didn't seem to help the analysis, but the results from the extended sets can be seen in the tables below.
+
+```{r, eval=first_run}
+# process the data once to get the timepoint info
+load("data/worm_counts_qc_filt_lax.rds")
+load("data/intestine_markers_extended_roc.rds")
+load("data/body_wall_muscle_markers_extended_roc.rds")
+load("data/pharynx_markers_extended_roc.rds")
+load("data/neuron_markers_roc.rds")
+load("data/cluster_names.rds")
+load("data/worm_meta.rds")
+
+# intestine extended
+name_pattern <- "^3_[1245]|^30_[04]|^1_2|^38_0"
+of_interest <- grepl(name_pattern, cluster_names) # intestine
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+intestine_table_extended <- timepoint_wrapper(worm_counts_qc_filt_lax, intestine_markers_extended, x)
+
+# body wall muscle extended
+name_pattern <- "^4_[012]|^1_1|^7_[01]|^143_0"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+bw_table_extended <- timepoint_wrapper(worm_counts_qc_filt_lax, body_wall_muscle_markers_extended, x)
+
+# pharynx extended
+name_pattern <- "^1_0|^26_[012]|^24_1|^41_0|^78_0|^9_[012]|^15_0|^24_0|^41_1"
+of_interest <- grepl(name_pattern, cluster_names)
+unique(cluster_names[of_interest])
+x <- rownames(meta[of_interest , ])
+pharynx_table_extended <- timepoint_wrapper(worm_counts_qc_filt_lax, pharynx_markers_extended, x)
+
+# neuron hasn't changed
+
+save(intestine_table_extended, file = "data/intestine_table_extended.rds")
+save(bw_table_extended, file = "data/bw_table_extended.rds")
+save(pharynx_table_extended, file = "data/pharynx_table_extended.rds")
+```
+
 
 ```{r}
-formatDT(intestine_table)
+load("data/intestine_table_extended.rds")
+load("data/bw_table_extended.rds")
+load("data/pharynx_table_extended.rds")
+load("data/neuron_table.rds")
+load("data/cluster_names.rds")
+```
+
+## Intestine extended
+
+```{r}
+formatDT(intestine_table_extended)
 ```
     
     
-# Body wall muscle
+## Body wall muscle extended
 
 ```{r}
-formatDT(bw_table)
+formatDT(bw_table_extended)
 ```
    
    
-# Pharynx
+## Pharynx extended
 
 ```{r}
-formatDT(pharynx_table)
+formatDT(pharynx_table_extended)
 ```
    
-   
-# Neurons
-
-```{r}
-formatDT(neuron_table)
-```
 
 # Checking the cluster names
 
@@ -225,9 +508,7 @@ tibble::tibble(cluster_name = unique(cluster_names[of_interest])) %>%
 	
 ```
 
-# Extended sets of clusters
-
-## Intestine_extended
+### Intestine_extended
 
 ```{r}
 name_pattern <- "^3_[1245]|^30_[04]|^1_2|^38_0"
@@ -235,7 +516,7 @@ of_interest <- grepl(name_pattern, cluster_names) # intestine
 unique(cluster_names[of_interest])
 ```
 
-## Body wall muscle extended
+### Body wall muscle extended
 
 ```{r}
 name_pattern <- "^4_[012]|^1_1|^7_[01]|^143_0"
@@ -243,7 +524,7 @@ of_interest <- grepl(name_pattern, cluster_names)
 unique(cluster_names[of_interest])
 ```
 
-## Pharynx extended
+### Pharynx extended
 
 ```{r}
 name_pattern <- "^1_0|^26_[012]|^24_1|^41_0|^78_0|^9_[012]|^15_0|^24_0|^41_1"
@@ -251,24 +532,6 @@ of_interest <- grepl(name_pattern, cluster_names)
 unique(cluster_names[of_interest])
 ```
 
-
-# Other clusters
-```{r}
-epithelium <- "^11_[12]|^13_1|^27_0|^41_2|^57_0|^68_1|^146_0"
-glia <- "^5_[01]|^16_0|^21_0|^30_5|^34_[01]|^37_0|^45_0|^79_[02]|^88_0|^141_0"
-hypodermis <- "^8_0|^30_[12]|^33_[01]|^2_0|^64_0"
-muscle_excl_bw_pharyngeal <- "^7_[234]|^38_[123]|^102_0"
-gonad <- "^18_0|^31_0|^43_0"
-germline <- "^3_[03]|^57_1"
-mesoderm <- "^23_0|^110_1|^119_0"
-coelomocyte <- "^110_0|^12_0"
-gland <- "^89_0|^30_3"
-seam <- "^0_0|^11_3"
-valve <- "^60_0"
-vulva <- "^11_0"
-excretory <- "^40_0"
-other <- "^13_0|^21_1|^42_0|^82_[01]"
-other_neurons <- "^5[369]_0|^58_[01]|^67_0|^9[56]_0|^105_0|^116_0|^12[456]_0|^139_0"
 
 
 
